@@ -39,7 +39,8 @@ Works great with [Bongo Cat](https://store.steampowered.com/app/3419430/Bongo_Ca
 #### 2. Hybrid Mode (click + keyboard)
 
 - Press "Click+Keys (10 sec)" or "Click+Keys until ESC"
-- Each cycle performs: 1 click + 109 key presses (letters, digits, arrows, F13-F24, navigation keys) in 4 SendInput batches
+- Each cycle performs: 1 click + key presses (letters, digits, arrows, F13-F24, navigation keys) in 4 SendInput batches — 84 keys by default, up to 86
+- The "Keys in cycle" grid lets you toggle any key on/off (default: all on except `F` and `R`, which break Bongo Cat); the list persists between launches and applies from the next run
 - Uses pre-allocated INPUT arrays and batched SendInput API for maximum throughput
 - Suitable for games with click frequency limits
 
@@ -53,6 +54,7 @@ Works great with [Bongo Cat](https://store.steampowered.com/app/3419430/Bongo_Ca
 ### Controls
 
 - All buttons become disabled while running
+- The "Keys in cycle" grid is locked and collapsed while a run is active; key changes apply from the next run
 - Press `ESC` to stop infinite modes
 - All logs are displayed in the application console (F12)
 

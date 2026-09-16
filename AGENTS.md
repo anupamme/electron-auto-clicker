@@ -7,7 +7,7 @@ Electron-based auto-clicker using PowerShell SendInput API. Two processes:
 - **Main Process** (`main.js`): Spawns PowerShell scripts, manages IPC
 - **Renderer Process** (`index.html`): UI, displays logs, sends commands
 
-**Features**: Mouse-only mode (~30ms/click), hybrid mode (click + 109 keys in 4 SendInput batches with pre-allocated INPUT arrays, ~8700 actions/10sec), and mouse move with click (moves cursor through coordinates and clicks at each point, button disabled until coordinates are added). Menu bar removed. All keys and processes are released on app close.
+**Features**: Mouse-only mode (~30ms/click), hybrid mode (click + configurable key set, 84 keys by default, in 4 SendInput batches with pre-allocated INPUT arrays), and mouse move with click (moves cursor through coordinates and clicks at each point, button disabled until coordinates are added). The renderer has a "Keys in cycle" toggle grid: every key can be enabled/disabled (defaults: F and R off — they break Bongo Cat), the choice persists in localStorage and is sent per-run via the `excludedKeys` IPC field; the grid locks and collapses while a run is active (changes apply from the next run). Menu bar removed. All keys and processes are released on app close.
 
 ## Validation Rules (CRITICAL)
 
@@ -184,12 +184,15 @@ public static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 // Uses SendInput API with pre-allocated INPUT[] arrays (4 small batches):
 // batch1Press (mouse+keys), batch1Release, batch2Press (shift+alpha), batch2Release
 // Each batch sent via single SendInput call, Sleep(15)/Sleep(10) between batches
-// Total: ~8700 actions per 10 seconds (110 actions/cycle: 1 click + 84 keys + shift + 24 alpha)
-// Key set lives in lib/hybrid-keys.js; every key banned from it is listed in
-// FORBIDDEN_KEYS there and asserted by test/hybrid-keys.test.js:
-// NEVER add F1-F12 (0x70-0x7B) — they break the game
-// NEVER add R (0x52) — it rotates the cat in Bongo Cat (issue #2)
-// NEVER add F (0x46) — it flips the cat horizontally in Bongo Cat (issue #7)
+// Default: 110 actions/cycle (1 click + 84 keys + shift + 24 alpha) — varies with
+// the user's exclusion list. Scripts are built per run by buildHybrid*Script():
+// the effective set comes from effectiveKeys(excludedKeys) in lib/hybrid-keys.js.
+// Key universe = ALL_KEYS (86 codes) = HYBRID_KEYS (84, the default set) + F + R.
+// F and R are excluded by DEFAULT (they break Bongo Cat, issues #2/#7) but the
+// user may re-enable them via the toggle grid — their presence in ALL_KEYS is
+// deliberate. HYBRID_KEYS itself must still never contain a FORBIDDEN_KEYS
+// entry, asserted by test/hybrid-keys.test.js:
+// NEVER add F1-F12 (0x70-0x7B) — they break the game (hard ban, see below)
 ```
 
 ---
@@ -210,6 +213,8 @@ public static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 
 **CRITICAL: Git operations**: NEVER commit or push without explicit user permission. Always ask before running `git commit` or `git push`.
 
-**CRITICAL: F1-F12 keys**: NEVER add F1-F12 keys (0x70-0x7B) to the hybrid clicker. They break the game (Bongo Cat). This is a hard ban.
+**CRITICAL: F1-F12 keys**: NEVER add F1-F12 keys (0x70-0x7B) to the hybrid clicker. They break the game (Bongo Cat). This is a hard ban. They are outside ALL_KEYS on purpose — keep it that way.
+
+**F/R keys**: F (0x46) and R (0x52) are NOT hard-banned anymore — they are default-excluded (Bongo Cat issues #2/#7) and user-toggleable via the "Keys in cycle" grid. Keep them out of `HYBRID_KEYS` (the default set) and out of `DEFAULT_EXCLUDED_CODES`' complement — i.e. the default behavior must always exclude them.
 
 **Debugging**: Main process logs go to renderer via `mainWindow.webContents.send("log", msg)`. DevTools: `Ctrl+Shift+I`

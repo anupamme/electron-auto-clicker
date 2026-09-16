@@ -165,6 +165,96 @@
         font-size: 14px;
         padding: 10px;
       }
+      .keys-section {
+        margin-top: 20px;
+        max-width: 720px;
+        width: 100%;
+      }
+      .keys-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 18px;
+        color: #333;
+      }
+      .keys-count {
+        font-weight: bold;
+      }
+      .keys-toggle-btn {
+        padding: 5px 15px;
+        font-size: 14px;
+        background: #2196f3;
+        margin-left: auto;
+      }
+      .keys-toggle-btn:hover {
+        background: #1976d2;
+      }
+      .keys-grid-container {
+        max-height: 260px;
+        overflow-y: auto;
+        margin-top: 15px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 10px;
+      }
+      .keys-group {
+        margin-bottom: 10px;
+      }
+      .keys-group:last-child {
+        margin-bottom: 0;
+      }
+      .keys-group-label {
+        font-size: 12px;
+        color: #888;
+        margin-bottom: 5px;
+      }
+      .keys-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+        gap: 4px;
+      }
+      button.key-btn {
+        padding: 6px 2px;
+        font-size: 12px;
+        background: #4caf50;
+      }
+      button.key-btn:hover {
+        background: #45a049;
+      }
+      button.key-btn.off {
+        background: #ccc;
+        color: #888;
+        text-decoration: line-through;
+      }
+      button.key-btn.off:hover {
+        background: #ccc;
+      }
+      /* Locked while a clicker run is active: keep the on/off colors,
+         just dim — base button:disabled would flatten everything to gray. */
+      button.key-btn:disabled {
+        background: #4caf50;
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      button.key-btn:disabled:hover {
+        background: #4caf50;
+      }
+      button.key-btn.off:disabled {
+        background: #ccc;
+      }
+      button.key-btn.off:disabled:hover {
+        background: #ccc;
+      }
+      .keys-all-off {
+        margin-top: 10px;
+        font-size: 13px;
+        color: #d32f2f;
+      }
+      .keys-hint {
+        margin-top: 5px;
+        font-size: 12px;
+        color: #888;
+      }
       .lang-selector {
         position: absolute;
         top: 10px;
@@ -208,6 +298,46 @@
       Press ESC to stop
     </div>
 
+    <div class="coordinate-section keys-section">
+      <div class="keys-header">
+        <span data-i18n="keysInCycle">Keys in cycle</span>
+        <span id="keysCount" class="keys-count"></span>
+        <button type="button" id="keysToggle" class="keys-toggle-btn">Show</button>
+      </div>
+      <div class="keys-hint" data-i18n="keysHint">
+        Keys pressed by the hybrid mode (Click+Keys). Click a key to toggle it.
+      </div>
+      <div id="keysAllOff" class="keys-all-off" style="display: none" data-i18n="keysAllOff">
+        All keys are off — only clicks will be sent
+      </div>
+      <div id="keysGridContainer" class="keys-grid-container" hidden>
+        <div class="keys-group">
+          <div class="keys-group-label" data-i18n="kgLetters">Letters</div>
+          <div class="keys-grid" id="kg-letters"></div>
+        </div>
+        <div class="keys-group">
+          <div class="keys-group-label" data-i18n="kgDigits">Digits</div>
+          <div class="keys-grid" id="kg-digits"></div>
+        </div>
+        <div class="keys-group">
+          <div class="keys-group-label" data-i18n="kgNumpad">Numpad</div>
+          <div class="keys-grid" id="kg-numpad"></div>
+        </div>
+        <div class="keys-group">
+          <div class="keys-group-label" data-i18n="kgNavigation">Navigation</div>
+          <div class="keys-grid" id="kg-nav"></div>
+        </div>
+        <div class="keys-group">
+          <div class="keys-group-label" data-i18n="kgOther">Other keys</div>
+          <div class="keys-grid" id="kg-other"></div>
+        </div>
+        <div class="keys-group">
+          <div class="keys-group-label" data-i18n="kgF13">F13-F24</div>
+          <div class="keys-grid" id="kg-f13"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="coordinate-section">
       <h2 data-i18n="cursorMovement">Cursor Movement by Coordinates</h2>
       <div class="coordinate-inputs">
@@ -232,6 +362,7 @@
     <script>
       const { ipcRenderer } = require("electron");
       const CoordLib = require("./lib/coordinates.js");
+      const KeysLib = require("./lib/hybrid-keys.js");
       const startBtn = document.getElementById("startBtn");
       const startInfiniteBtn = document.getElementById("startInfiniteBtn");
       const startHybridBtn = document.getElementById("startHybridBtn");
@@ -242,6 +373,10 @@
       const coordInterval = document.getElementById("coordInterval");
       const coordinatesList = document.getElementById("coordinatesList");
       const langSelect = document.getElementById("langSelect");
+      const keysToggle = document.getElementById("keysToggle");
+      const keysCount = document.getElementById("keysCount");
+      const keysAllOff = document.getElementById("keysAllOff");
+      const keysGridContainer = document.getElementById("keysGridContainer");
 
       console.log("App started");
 
@@ -274,6 +409,17 @@
           error: "Error: ",
           startMovingMouse: "Start moving mouse with click",
           movingMouseEsc: "Moving mouse with click... (press ESC to stop)",
+          keysInCycle: "Keys in cycle",
+          keysShow: "Show",
+          keysHide: "Hide",
+          keysHint: "Keys pressed by the hybrid mode (Click+Keys). Click a key to toggle it.",
+          keysAllOff: "All keys are off — only clicks will be sent",
+          kgLetters: "Letters",
+          kgDigits: "Digits",
+          kgNumpad: "Numpad",
+          kgNavigation: "Navigation",
+          kgOther: "Other keys",
+          kgF13: "F13-F24",
         },
         zh: {
           title: "自动点击器",
@@ -302,6 +448,17 @@
           error: "错误: ",
           startMovingMouse: "开始通过点击移动鼠标",
           movingMouseEsc: "移动鼠标并点击中... (按 ESC 停止)",
+          keysInCycle: "循环中的按键",
+          keysShow: "显示",
+          keysHide: "隐藏",
+          keysHint: "混合模式（点击+按键）使用的按键。点击按键可切换开关。",
+          keysAllOff: "所有按键已关闭——只会发送点击",
+          kgLetters: "字母",
+          kgDigits: "数字",
+          kgNumpad: "小键盘",
+          kgNavigation: "导航键",
+          kgOther: "其他按键",
+          kgF13: "F13-F24",
         },
         es: {
           title: "Auto Clicker",
@@ -330,6 +487,18 @@
           error: "Error: ",
           startMovingMouse: "Iniciar movimiento del ratón con clic",
           movingMouseEsc: "Moviendo el ratón con clic... (pulsa ESC para detener)",
+          keysInCycle: "Teclas en el ciclo",
+          keysShow: "Mostrar",
+          keysHide: "Ocultar",
+          keysHint:
+            "Teclas que pulsa el modo híbrido (Clics+Teclas). Haz clic en una tecla para activarla o desactivarla.",
+          keysAllOff: "Todas las teclas están desactivadas: solo se enviarán clics",
+          kgLetters: "Letras",
+          kgDigits: "Dígitos",
+          kgNumpad: "Teclado numérico",
+          kgNavigation: "Navegación",
+          kgOther: "Otras teclas",
+          kgF13: "F13-F24",
         },
         fr: {
           title: "Auto Clicker",
@@ -358,6 +527,18 @@
           error: "Erreur : ",
           startMovingMouse: "Démarrer le déplacement de la souris avec clic",
           movingMouseEsc: "Déplacement de la souris avec clic... (appuyez sur ESC pour arrêter)",
+          keysInCycle: "Touches dans le cycle",
+          keysShow: "Afficher",
+          keysHide: "Masquer",
+          keysHint:
+            "Touches utilisées par le mode hybride (Clics+Touches). Cliquez sur une touche pour l'activer/désactiver.",
+          keysAllOff: "Toutes les touches sont désactivées — seuls les clics seront envoyés",
+          kgLetters: "Lettres",
+          kgDigits: "Chiffres",
+          kgNumpad: "Pavé numérique",
+          kgNavigation: "Navigation",
+          kgOther: "Autres touches",
+          kgF13: "F13-F24",
         },
         ru: {
           title: "Авто Кликер",
@@ -386,6 +567,18 @@
           error: "Ошибка: ",
           startMovingMouse: "Начать перемещение мыши с кликом",
           movingMouseEsc: "Перемещение мыши с кликом... (нажмите ESC для остановки)",
+          keysInCycle: "Клавиши в цикле",
+          keysShow: "Показать",
+          keysHide: "Скрыть",
+          keysHint:
+            "Клавиши, нажимаемые в гибридном режиме (Клики+Клавиши). Клик по клавише включает/выключает её.",
+          keysAllOff: "Все клавиши выключены — будут отправляться только клики",
+          kgLetters: "Буквы",
+          kgDigits: "Цифры",
+          kgNumpad: "Numpad",
+          kgNavigation: "Навигация",
+          kgOther: "Прочие",
+          kgF13: "F13-F24",
         },
         ko: {
           title: "자동 클릭기",
@@ -414,6 +607,18 @@
           error: "오류: ",
           startMovingMouse: "클릭하며 마우스 이동 시작",
           movingMouseEsc: "클릭하며 마우스 이동 중... (중지하려면 ESC 키)",
+          keysInCycle: "사이클 키",
+          keysShow: "표시",
+          keysHide: "숨기기",
+          keysHint:
+            "하이브리드 모드(클릭+키 입력)에서 사용되는 키입니다. 키를 클릭하면 켜기/끄기가 전환됩니다.",
+          keysAllOff: "모든 키가 꺼져 있습니다 — 클릭만 전송됩니다",
+          kgLetters: "문자",
+          kgDigits: "숫자",
+          kgNumpad: "넘패드",
+          kgNavigation: "탐색",
+          kgOther: "기타 키",
+          kgF13: "F13-F24",
         },
       };
 
@@ -435,6 +640,7 @@
         });
         document.title = t("title");
         renderCoordinates();
+        updateKeysToggleText();
       }
 
       langSelect.addEventListener("change", () => {
@@ -539,13 +745,136 @@
         if (error !== "Cancelled") alert(t("error") + error);
       });
 
+      // ── Hybrid key exclusions (toggle grid) ──
+      // Display groups for the grid; key names come from KEY_NAMES (lib).
+      const KEY_GROUPS = [
+        {
+          id: "kg-letters",
+          codes: KeysLib.ALL_KEYS.filter((c) => c >= 0x41 && c <= 0x5a).sort((a, b) => a - b),
+        },
+        { id: "kg-digits", codes: KeysLib.ALL_KEYS.filter((c) => c >= 0x30 && c <= 0x39) },
+        {
+          id: "kg-numpad",
+          codes: KeysLib.ALL_KEYS.filter((c) => c >= 0x60 && c <= 0x6f).sort((a, b) => a - b),
+        },
+        { id: "kg-nav", codes: [0x25, 0x26, 0x27, 0x28, 0x24, 0x23, 0x21, 0x22, 0x2d, 0x2e] },
+        {
+          id: "kg-other",
+          codes: [0x20, 0x08, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf, 0xc0, 0xdb, 0xdc, 0xdd, 0xde],
+        },
+        { id: "kg-f13", codes: KeysLib.ALL_KEYS.filter((c) => c >= 0x7c && c <= 0x87) },
+      ];
+
+      // Absent storage key -> defaults [F, R]; present "[]" -> press everything
+      // (no resurrection of deleted defaults); corrupt/garbage -> dropped.
+      function loadExcludedKeys() {
+        try {
+          const raw = localStorage.getItem("excludedKeys");
+          if (raw === null) return [...KeysLib.DEFAULT_EXCLUDED_CODES];
+          const parsed = JSON.parse(raw);
+          if (!Array.isArray(parsed)) return [...KeysLib.DEFAULT_EXCLUDED_CODES];
+          const universe = new Set(KeysLib.ALL_KEYS);
+          const valid = parsed.filter((c) => Number.isInteger(c) && universe.has(c));
+          return [...new Set(valid)];
+        } catch {
+          return [...KeysLib.DEFAULT_EXCLUDED_CODES];
+        }
+      }
+
+      let excludedKeys = loadExcludedKeys();
+
+      function saveExcludedKeys() {
+        localStorage.setItem("excludedKeys", JSON.stringify(excludedKeys));
+      }
+
+      function updateKeysCount() {
+        keysCount.textContent = `${KeysLib.ALL_KEYS.length - excludedKeys.length}/${
+          KeysLib.ALL_KEYS.length
+        }`;
+        keysAllOff.style.display =
+          excludedKeys.length === KeysLib.ALL_KEYS.length ? "block" : "none";
+      }
+
+      function renderKeysGrid() {
+        for (const group of KEY_GROUPS) {
+          const container = document.getElementById(group.id);
+          container.textContent = "";
+          for (const code of group.codes) {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "key-btn" + (excludedKeys.includes(code) ? " off" : "");
+            btn.disabled = keysLocked;
+            // The Numpad group shows short labels ("0", "*") — the group header
+            // already says Numpad, and KEY_NAMES stays unique for lookups/tests.
+            btn.textContent =
+              group.id === "kg-numpad"
+                ? KeysLib.KEY_NAMES[code].replace(/^(Numpad|Num)/, "")
+                : KeysLib.KEY_NAMES[code];
+            btn.addEventListener("click", (e) => {
+              // Pointer clicks blur first so a later Enter/Space cannot
+              // re-toggle the focused key; the full re-render also drops focus.
+              if (e.detail > 0) btn.blur();
+              toggleExcludedKey(code);
+            });
+            container.appendChild(btn);
+          }
+        }
+        updateKeysCount();
+      }
+
+      function toggleExcludedKey(code) {
+        const index = excludedKeys.indexOf(code);
+        if (index === -1) {
+          excludedKeys.push(code);
+        } else {
+          excludedKeys.splice(index, 1);
+        }
+        saveExcludedKeys();
+        renderKeysGrid();
+      }
+
+      function updateKeysToggleText() {
+        keysToggle.textContent = keysGridContainer.hidden ? t("keysShow") : t("keysHide");
+      }
+
+      keysToggle.addEventListener("click", () => {
+        keysGridContainer.hidden = !keysGridContainer.hidden;
+        updateKeysToggleText();
+      });
+
+      function getExcludedKeys() {
+        return [...excludedKeys];
+      }
+
       // ── Clicker controls ──
+      // While a clicker run is active the key grid is locked (toggles disabled)
+      // and the section is collapsed; the pre-run expansion state is restored
+      // afterwards. Key set changes would only apply to the next run anyway.
+      let keysLocked = false;
+      let keysGridWasOpen = false;
+
+      function setKeysLocked(locked) {
+        keysLocked = locked;
+        keysToggle.disabled = locked;
+        if (locked) {
+          keysGridWasOpen = !keysGridContainer.hidden;
+          keysGridContainer.hidden = true;
+        } else {
+          keysGridContainer.hidden = !keysGridWasOpen;
+        }
+        updateKeysToggleText();
+        document.querySelectorAll(".key-btn").forEach((btn) => {
+          btn.disabled = locked;
+        });
+      }
+
       function disableAllButtons() {
         startBtn.disabled = true;
         startInfiniteBtn.disabled = true;
         startHybridBtn.disabled = true;
         startHybridInfiniteBtn.disabled = true;
         startMovingBtn.disabled = true;
+        setKeysLocked(true);
       }
 
       function enableAllButtons() {
@@ -553,6 +882,7 @@
         startInfiniteBtn.disabled = false;
         startHybridBtn.disabled = false;
         startHybridInfiniteBtn.disabled = false;
+        setKeysLocked(false);
         updateMovingBtnState();
       }
 
@@ -582,14 +912,20 @@
         disableAllButtons();
         status.textContent = t("clicksKeys10sec");
         escapeHint.style.display = "none";
-        ipcRenderer.send("start-hybrid-clicker", { coordinates: getCoords() });
+        ipcRenderer.send("start-hybrid-clicker", {
+          coordinates: getCoords(),
+          excludedKeys: getExcludedKeys(),
+        });
       });
 
       startHybridInfiniteBtn.addEventListener("click", () => {
         disableAllButtons();
         status.textContent = t("clicksKeysEsc");
         escapeHint.style.display = "block";
-        ipcRenderer.send("start-hybrid-clicker-infinite", { coordinates: getCoords() });
+        ipcRenderer.send("start-hybrid-clicker-infinite", {
+          coordinates: getCoords(),
+          excludedKeys: getExcludedKeys(),
+        });
       });
 
       startMovingBtn.addEventListener("click", () => {
@@ -639,7 +975,8 @@
         console.error("[PowerShell Error]:", data);
       });
 
-      // Apply translations on load
+      // Apply translations on load (also sets the keys toggle label)
+      renderKeysGrid();
       applyTranslations();
     </script>
   </body>

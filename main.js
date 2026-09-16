@@ -4,7 +4,7 @@ const path = require("path");
 const fs = require("fs");
 const os = require("os");
 const { sanitizeCoordinates } = require("./lib/coordinates.js");
-const { HYBRID_KEYS, HYBRID_ALPHA_KEYS } = require("./lib/hybrid-keys.js");
+const { ALL_KEYS, effectiveKeys } = require("./lib/hybrid-keys.js");
 
 let mainWindow;
 let clickerProcess = null;
@@ -105,9 +105,10 @@ public class KeyReleaser {
     // Release Shift
     keybd_event(0x10, 0, KEYEVENTF_KEYUP, 0);
 
-    // Release all keys used by hybrid clicker
+    // Release every key the hybrid clicker could possibly have pressed
+    // (ALL_KEYS superset — F/R included in case the user re-enabled them).
     byte[] keys = new byte[] {
-      ${toCSharpBytes(HYBRID_KEYS)}
+      ${toCSharpBytes(ALL_KEYS)}
     };
     for (int i = 0; i < keys.Length; i++)
       keybd_event(keys[i], 0, KEYEVENTF_KEYUP, 0);
@@ -185,7 +186,10 @@ const SENDINPUT_TYPES = `
 
 // Shared C# HybridClicker class (used by both timed and infinite modes).
 // Exposes Smash() for one cycle and RunTimed(seconds) for the timed loop.
-const HYBRID_CLICKER_CLASS = `using System;
+// Built per run: `effective` = { keys, alphaKeys } resolved by effectiveKeys()
+// from the user's exclusion list (defaults to [F, R] when not provided).
+function buildHybridClickerClass(effective) {
+  return `using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -194,11 +198,11 @@ public class HybridClicker {
 ${SENDINPUT_TYPES}
 
   private static readonly byte[] keys = new byte[] {
-    ${toCSharpBytes(HYBRID_KEYS)}
+    ${toCSharpBytes(effective.keys)}
   };
 
   private static readonly byte[] alphaKeys = new byte[] {
-    ${toCSharpBytes(HYBRID_ALPHA_KEYS)}
+    ${toCSharpBytes(effective.alphaKeys)}
   };
 
   private static readonly INPUT[] batch1Press;
@@ -270,6 +274,7 @@ ${SENDINPUT_TYPES}
     return "Done. Cycles: " + cycles + ", Total actions: " + totalActions + " in " + sw.ElapsedMilliseconds + "ms";
   }
 }`;
+}
 
 // Shared C# MouseClicker class for mouse-only modes.
 const MOUSE_CLICKER_CLASS = `using System;
@@ -358,10 +363,11 @@ ${MOUSE_CLICKER_CLASS}
 }
 `;
 
-const HYBRID_TIMED_SCRIPT = `
+function buildHybridTimedScript(excluded) {
+  return `
 try {
   Add-Type -TypeDefinition @'
-${HYBRID_CLICKER_CLASS}
+${buildHybridClickerClass(effectiveKeys(excluded))}
 '@
   Write-Output ([HybridClicker]::RunTimed(${CLICK_DURATION_SECONDS}))
 } catch {
@@ -369,11 +375,13 @@ ${HYBRID_CLICKER_CLASS}
   Write-Output "Stack: $($_.ScriptStackTrace)"
 }
 `;
+}
 
-const HYBRID_INFINITE_SCRIPT = `
+function buildHybridInfiniteScript(excluded) {
+  return `
 try {
   Add-Type -TypeDefinition @'
-${HYBRID_CLICKER_CLASS}
+${buildHybridClickerClass(effectiveKeys(excluded))}
 '@
   while ($true) {
     [HybridClicker]::Smash()
@@ -383,6 +391,7 @@ ${HYBRID_CLICKER_CLASS}
   Write-Output "Stack: $($_.ScriptStackTrace)"
 }
 `;
+}
 
 // Spawn a clicker PowerShell script and wire up the common lifecycle:
 // stdout/stderr forwarding, temp-file cleanup, ESC handling and renderer replies.
@@ -461,6 +470,14 @@ function isClickerBusy(channel) {
     return true;
   }
   return false;
+}
+
+// Log a heads-up when every key is toggled off: the run is still structurally
+// valid (click + bare Shift batches), but the user probably did not mean it.
+function warnIfNoKeysEnabled(excluded) {
+  if (effectiveKeys(excluded).keys.length === 0) {
+    sendToRenderer("log", "Warning: all keys are excluded — the clicker will only click");
+  }
 }
 
 // Returns true if a mouse-move process was actually spawned, false otherwise.
@@ -653,9 +670,11 @@ ipcMain.on("start-hybrid-clicker", (event, data) => {
   if (isClickerBusy("start-hybrid-clicker")) return;
   sendToRenderer("log", "IPC start-hybrid-clicker received");
   if (data) startMouseMoveIfNeeded(data.coordinates);
+  const excluded = data?.excludedKeys;
+  warnIfNoKeysEnabled(excluded);
   runClickerScript({
     name: "hybrid-clicker",
-    script: HYBRID_TIMED_SCRIPT,
+    script: buildHybridTimedScript(excluded),
     event,
     reportExitCode: true,
   });
@@ -665,9 +684,11 @@ ipcMain.on("start-hybrid-clicker-infinite", (event, data) => {
   if (isClickerBusy("start-hybrid-clicker-infinite")) return;
   sendToRenderer("log", "IPC start-hybrid-clicker-infinite received");
   if (data) startMouseMoveIfNeeded(data.coordinates);
+  const excluded = data?.excludedKeys;
+  warnIfNoKeysEnabled(excluded);
   runClickerScript({
     name: "hybrid-clicker-infinite",
-    script: HYBRID_INFINITE_SCRIPT,
+    script: buildHybridInfiniteScript(excluded),
     event,
     reportExitCode: false,
   });
