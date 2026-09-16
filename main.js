@@ -30,8 +30,8 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     icon: path.join(__dirname, "assets", "icon.ico"),
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      nodeIntegration: false,
+      contextIsolation: true,
     },
   });
   mainWindow.maximize();
@@ -65,7 +65,8 @@ app.on("activate", () => {
 let scriptSeq = 0;
 function uniqueScriptPath(name) {
   scriptSeq++;
-  return path.join(os.tmpdir(), `${name}-${Date.now()}-${scriptSeq}.ps1`);
+  const safeName = path.basename(String(name)).replace(/[^a-zA-Z0-9_-]/g, "_");
+  return path.join(os.tmpdir(), `${safeName}-${Date.now()}-${scriptSeq}.ps1`);
 }
 
 function stopMouseMove() {
