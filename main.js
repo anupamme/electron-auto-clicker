@@ -32,6 +32,8 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: false,
+      preload: path.join(__dirname, "preload.js"),
     },
   });
   mainWindow.maximize();
@@ -65,8 +67,7 @@ app.on("activate", () => {
 let scriptSeq = 0;
 function uniqueScriptPath(name) {
   scriptSeq++;
-  const safeName = path.basename(String(name)).replace(/[^a-zA-Z0-9_-]/g, "_");
-  return path.join(os.tmpdir(), `${safeName}-${Date.now()}-${scriptSeq}.ps1`);
+  return path.join(os.tmpdir(), `${name}-${Date.now()}-${scriptSeq}.ps1`);
 }
 
 function stopMouseMove() {
